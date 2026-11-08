@@ -1,1 +1,134 @@
 
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STOCK360 - Escáner</title>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#17191d;color:white;font-family:Arial,sans-serif;text-align:center}
+header{background:#ffd329;color:#17191d;padding:22px;font-size:25px;font-weight:900}
+main{max-width:550px;margin:30px auto;padding:20px}
+h2{font-size:23px}
+p{color:#c7cbd1;line-height:1.5}
+#reader{width:100%;margin:25px auto;background:#25282e;border-radius:14px;overflow:hidden}
+button{border:0;border-radius:10px;padding:15px 20px;margin:8px;font-weight:900;font-size:15px;cursor:pointer}
+#start{background:#ffd329;color:#17191d}
+#stop{background:#444a54;color:white}
+#resultado{background:#25282e;border-radius:12px;padding:20px;margin-top:20px;display:none}
+#ean{font-size:26px;font-weight:900;color:#ffd329;letter-spacing:2px}
+#estado{margin:18px 0;font-weight:bold}
+#volver{background:#ffd329;color:#17191d;display:none}
+</style>
+</head>
+<body>
+<header>STOCK360 · ESCÁNER</header>
+<main>
+<h2>Escanea un código de barras</h2>
+<p>Permite el acceso a la cámara y coloca el código de barras delante de ella.</p>
+
+<div id="reader"></div>
+
+<div id="estado">Pulsa INICIAR ESCÁNER para comenzar.</div>
+
+<button id="start" onclick="iniciar()">📷 INICIAR ESCÁNER</button>
+<button id="stop" onclick="detener()">DETENER</button>
+
+<div id="resultado">
+<p>✅ Código detectado</p>
+<div id="ean"></div>
+<p>El código se ha enviado a STOCK360 si has abierto este lector desde la aplicación.</p>
+<button id="volver" onclick="volverStock()">VOLVER A STOCK360</button>
+</div>
+</main>
+
+<script>
+let lector=null;
+let activo=false;
+let codigoLeido=false;
+
+const formatos=[
+Html5QrcodeSupportedFormats.EAN_13,
+Html5QrcodeSupportedFormats.EAN_8,
+Html5QrcodeSupportedFormats.UPC_A,
+Html5QrcodeSupportedFormats.UPC_E
+];
+
+async function iniciar(){
+  if(activo)return;
+
+  if(!window.Html5Qrcode){
+    document.getElementById("estado").textContent=
+      "No se ha podido cargar el lector. Comprueba tu conexión.";
+    return;
+  }
+
+  document.getElementById("estado").textContent=
+    "Solicitando permiso para utilizar la cámara...";
+
+  lector=new Html5Qrcode("reader",{
+    formatsToSupport:formatos,
+    verbose:false
+  });
+
+  try{
+    await lector.start(
+      {facingMode:"environment"},
+      {fps:10,qrbox:{width:280,height:130}},
+      codigo=>{
+        if(codigoLeido)return;
+
+        const ean=String(codigo).replace(/\D/g,"");
+        if(![8,12,13,14].includes(ean.length))return;
+
+        codigoLeido=true;
+        document.getElementById("ean").textContent=ean;
+        document.getElementById("resultado").style.display="block";
+        document.getElementById("volver").style.display="inline-block";
+        document.getElementById("estado").textContent="¡Código leído correctamente!";
+
+        if(window.opener){
+          window.opener.postMessage({
+            type:"STOCK360_EAN",
+            ean:ean
+          },"*");
+        }
+
+        detener();
+      },
+      ()=>{}
+    );
+
+    activo=true;
+    document.getElementById("estado").textContent=
+      "Cámara activa. Enfoca el código de barras.";
+  }catch(error){
+    document.getElementById("estado").textContent=
+      "No se pudo abrir la cámara. Comprueba los permisos del navegador y que estás usando HTTPS. Detalle: "+
+      (error.message||error);
+  }
+}
+
+async function detener(){
+  if(lector && activo){
+    try{
+      await lector.stop();
+      lector.clear();
+    }catch(error){}
+  }
+  activo=false;
+}
+
+function volverStock(){
+  if(window.opener){
+    window.close();
+  }else{
+    history.back();
+  }
+}
+</script>
+</body>
+</html>
+
