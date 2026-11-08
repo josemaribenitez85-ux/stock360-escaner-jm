@@ -24,7 +24,9 @@ button{border:0;border-radius:10px;padding:15px 20px;margin:8px;font-weight:900;
 </style>
 </head>
 <body>
+
 <header>STOCK360 · ESCÁNER</header>
+
 <main>
 <h2>Escanea un código de barras</h2>
 <p>Permite el acceso a la cámara y coloca el código de barras delante de ella.</p>
@@ -39,7 +41,7 @@ button{border:0;border-radius:10px;padding:15px 20px;margin:8px;font-weight:900;
 <div id="resultado">
 <p>✅ Código detectado</p>
 <div id="ean"></div>
-<p>El código se ha enviado a STOCK360 si has abierto este lector desde la aplicación.</p>
+<p id="mensaje">Enviando código a STOCK360...</p>
 <button id="volver" onclick="volverStock()">VOLVER A STOCK360</button>
 </div>
 </main>
@@ -77,26 +79,49 @@ async function iniciar(){
     await lector.start(
       {facingMode:"environment"},
       {fps:10,qrbox:{width:280,height:130}},
-      codigo=>{
+      async codigo=>{
         if(codigoLeido)return;
 
         const ean=String(codigo).replace(/\D/g,"");
         if(![8,12,13,14].includes(ean.length))return;
 
         codigoLeido=true;
+
         document.getElementById("ean").textContent=ean;
         document.getElementById("resultado").style.display="block";
-        document.getElementById("volver").style.display="inline-block";
-        document.getElementById("estado").textContent="¡Código leído correctamente!";
+        document.getElementById("estado").textContent=
+          "¡Código leído correctamente!";
 
-        if(window.opener){
-          window.opener.postMessage({
-            type:"STOCK360_EAN",
-            ean:ean
-          },"*");
+        if(window.opener && !window.opener.closed){
+          try{
+            window.opener.postMessage({
+              type:"STOCK360_EAN",
+              ean:ean
+            },"*");
+
+            document.getElementById("mensaje").textContent=
+              "✅ Código enviado. Volviendo a STOCK360...";
+
+            window.opener.focus();
+
+            await detener();
+
+            setTimeout(()=>{
+              window.close();
+            },800);
+
+          }catch(error){
+            document.getElementById("mensaje").textContent=
+              "No se pudo enviar el código. Pulsa VOLVER A STOCK360.";
+            document.getElementById("volver").style.display="inline-block";
+          }
+
+        }else{
+          document.getElementById("mensaje").textContent=
+            "No se ha detectado la ventana de STOCK360. Puedes copiar el código.";
+          document.getElementById("volver").style.display="inline-block";
+          await detener();
         }
-
-        detener();
       },
       ()=>{}
     );
@@ -104,6 +129,7 @@ async function iniciar(){
     activo=true;
     document.getElementById("estado").textContent=
       "Cámara activa. Enfoca el código de barras.";
+
   }catch(error){
     document.getElementById("estado").textContent=
       "No se pudo abrir la cámara. Comprueba los permisos del navegador y que estás usando HTTPS. Detalle: "+
@@ -122,13 +148,14 @@ async function detener(){
 }
 
 function volverStock(){
-  if(window.opener){
+  if(window.opener && !window.opener.closed){
+    window.opener.focus();
     window.close();
   }else{
     history.back();
   }
 }
 </script>
+
 </body>
 </html>
-
